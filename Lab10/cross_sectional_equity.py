@@ -93,6 +93,8 @@ def make_pipeline():
     # average of sentiment data
     value = Fundamentals.ebit.latest / Fundamentals.enterprise_value.latest
     quality = Fundamentals.roe.latest
+    market = Fundamentals.market_cap.latest
+    revenue = Fundamentals.total_revenue.latest
     sentiment_score = SimpleMovingAverage(
         inputs=[stocktwits.bull_minus_bear],
         window_length=3,
@@ -103,8 +105,11 @@ def make_pipeline():
     # We winsorize our factor values in order to lessen the impact of outliers
     # For more information on winsorization, please see
     # https://en.wikipedia.org/wiki/Winsorizing
+    market_winsorized = market.winsorize(min_percentile=0.5, max_percentile=0.95)
+    revenue_winsorized = revenue.winsorize(min_percentile=0.5, max_percentile=0.95)
     value_winsorized = value.winsorize(min_percentile=0.05, max_percentile=0.95)
     quality_winsorized = quality.winsorize(min_percentile=0.05, max_percentile=0.95)
+    
     sentiment_score_winsorized = sentiment_score.winsorize(
         min_percentile=0.05,
         max_percentile=0.95
@@ -114,6 +119,8 @@ def make_pipeline():
     combined_factor = (
         value_winsorized.zscore() +
         quality_winsorized.zscore() +
+        market_winsorized.zscore() + 
+        revenue_winsorized.zscore() +
         sentiment_score_winsorized.zscore()
     )
 
