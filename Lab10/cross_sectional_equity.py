@@ -7,18 +7,6 @@ Original file is located at
     https://colab.research.google.com/drive/1DYsxRhBEZSulIwCvn44HP3LvajTc5POn
 """
 
-"""
-This algorithm demonstrates the concept of long-short equity. It uses a
-combination of factors to construct a ranking of securities in a liquid
-tradable universe. It then goes long on the highest-ranked securities and short
-on the lowest-ranked securities.
-For information on long-short equity strategies, please see the corresponding
-lecture on our lectures page:
-https://www.quantopian.com/lectures
-This algorithm was developed as part of Quantopian's Lecture Series. Please
-direct and questions, feedback, or corrections to feedback@quantopian.com
-"""
-
 import quantopian.algorithm as algo
 import quantopian.optimize as opt
 from quantopian.pipeline import Pipeline
@@ -72,7 +60,7 @@ def initialize(context):
 
     # Record our portfolio variables at the end of day
     algo.schedule_function(func=record_vars,
-                           date_rule=algo.date_rules.every_day(),
+                           date_rule=algo.date_rules.week_start(),
                            time_rule=algo.time_rules.market_close(),
                            half_days=True)
 
@@ -91,10 +79,13 @@ def make_pipeline():
     """
     # The factors we create here are based on fundamentals data and a moving
     # average of sentiment data
+    
     value = Fundamentals.ebit.latest / Fundamentals.enterprise_value.latest
     quality = Fundamentals.roe.latest
     market = Fundamentals.market_cap.latest
-    revenue = Fundamentals.total_revenue.latest
+    ratio = Fundamentals.payout_ratio.latest
+    book = Fundamentals.book_value_yield.latest
+    
     sentiment_score = SimpleMovingAverage(
         inputs=[stocktwits.bull_minus_bear],
         window_length=3,
@@ -105,23 +96,29 @@ def make_pipeline():
     # We winsorize our factor values in order to lessen the impact of outliers
     # For more information on winsorization, please see
     # https://en.wikipedia.org/wiki/Winsorizing
-    market_winsorized = market.winsorize(min_percentile=0.5, max_percentile=0.95)
-    revenue_winsorized = revenue.winsorize(min_percentile=0.5, max_percentile=0.95)
+
+    # FACTORS
+    
     value_winsorized = value.winsorize(min_percentile=0.05, max_percentile=0.95)
     quality_winsorized = quality.winsorize(min_percentile=0.05, max_percentile=0.95)
+    market_winsorized = market.winsorize(min_percentile=0.5, max_percentile=0.95)
+    ratio_winsorized = ratio.winsorize(min_percentile=0.5, max_percentile=0.95)
+    book_winsorized = book.winsorize(min_percentile=0.5, max_percentile=0.95)
+    
     
     sentiment_score_winsorized = sentiment_score.winsorize(
         min_percentile=0.05,
         max_percentile=0.95
-        )
+    )
 
     # Here we combine our winsorized factors, z-scoring them to equalize their influence
     combined_factor = (
         value_winsorized.zscore() +
         quality_winsorized.zscore() +
+        sentiment_score_winsorized.zscore() +
         market_winsorized.zscore() + 
-        revenue_winsorized.zscore() +
-        sentiment_score_winsorized.zscore()
+        ratio_winsorized.zscore() + 
+        book_winsorized.zscore()
     )
 
     # Build Filters representing the top and bottom baskets of stocks by our
